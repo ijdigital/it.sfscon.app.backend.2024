@@ -781,8 +781,7 @@ async def csv_users():
     )
 
 
-async def get_all_anonymous_users_with_bookmarked_sessions(order_field: Optional[str] = None,
-                                                           order_direction: Optional[models.SortOrder] = None):
+async def get_all_anonymous_users_with_bookmarked_sessions(order: Optional[str] = None):
     conference = await get_current_conference()
     if not conference:
         raise HTTPException(status_code=404, detail={"code": "CONFERENCE_NOT_FOUND", "message": "Conference not found"})
@@ -800,12 +799,14 @@ async def get_all_anonymous_users_with_bookmarked_sessions(order_field: Optional
     ]
 
     # Apply sorting if specified
-    if order_field and order_direction:
-        reverse = order_direction == models.SortOrder.DESCENDING
-        if order_field == 'register_at':
+    if order:
+        reverse = order.startswith('-')
+        field = order[1:] if reverse else order
+
+        if field == 'register_at':
             users_data.sort(key=lambda x: x['register_at'], reverse=reverse)
-        elif order_field in ['bookmarks', 'nr_ratings']:
-            users_data.sort(key=lambda x: x[order_field], reverse=reverse)
+        elif field in ['bookmarks', 'nr_ratings']:
+            users_data.sort(key=lambda x: x[field], reverse=reverse)
 
     return users_data
 
@@ -846,7 +847,7 @@ async def csv_sessions():
     )
 
 
-async def get_sessions_by_rate(order_field: Optional[str] = None, order_direction: Optional[models.SortOrder] = None):
+async def get_sessions_by_rate(order: Optional[str] = None):
     conference = await get_current_conference()
     if not conference:
         raise HTTPException(status_code=404, detail={"code": "CONFERENCE_NOT_FOUND", "message": "Conference not found"})
@@ -869,23 +870,22 @@ async def get_sessions_by_rate(order_field: Optional[str] = None, order_directio
         for session in all_sessions
     ]
 
-    # Apply sorting if specified
-    if order_field and order_direction:
-        reverse = order_direction == models.SortOrder.DESCENDING
+    if order:
+        reverse = order.startswith('-')
+        field = order[1:] if reverse else order
 
-        # Sorting for different fields
-        if order_field == 'avg_rate':
+        if field == 'avg_rate':
             rated_sessions = [s for s in sessions_data if s['avg_rate'] is not None]
             unrated_sessions = [s for s in sessions_data if s['avg_rate'] is None]
 
             rated_sessions.sort(key=lambda x: -x['avg_rate'], reverse=reverse)
 
             sessions_data = rated_sessions + unrated_sessions
-        elif order_field == 'bookmarks':
+        elif field == 'bookmarks':
             sessions_data.sort(
                 key=lambda x: (x['bookmarks'] is None, -x['bookmarks'] if x['bookmarks'] is not None else 0),
                 reverse=reverse)
-        elif order_field == 'rates':
+        elif field == 'rates':
             sessions_data.sort(key=lambda x: (x['rates'] is None, -x['rates'] if x['rates'] is not None else 0),
                                reverse=reverse)
 
@@ -1053,9 +1053,21 @@ async def do_import_xml(request):
                                    group_notifications_by_user=request.group_notifications_by_user)
     except Exception as e:
         raise
+
+    # Update last sync time
+    last_sync_time = datetime.datetime.now()  # Ensure it's in UTC
+    await models.LastSync.create(last_sync_time=last_sync_time)
+
     conference = res['conference']
 
     return ConferenceImportRequestResponse(id=str(conference.id), created=res['created'], changes=res['changes'])
+
+async def get_last_sync_time():
+    last_sync_entry = await models.LastSync.all().order_by('-last_sync_time').first()
+    if last_sync_entry:
+        formatted_time = last_sync_entry.last_sync_time.strftime('%Y-%m-%d %H:%M:%S')
+        return formatted_time
+    return None
 
 
 async def opencon_serialize_static(conference):

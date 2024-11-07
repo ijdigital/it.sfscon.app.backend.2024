@@ -232,6 +232,13 @@ class SortOrder(str, Enum):
     ASCENDING = "ascend"
     DESCENDING = "descend"
 
+class LastSync(Model):
+    id = fields.IntField(pk=True)
+    last_sync_time = fields.DatetimeField(null=True)
+
+    class Meta:
+        table = "last_sync"
+
 class Entrance(Model):
     class Meta:
         table = "conferences_entrances"

@@ -125,7 +125,6 @@ async def admin_import_conference_xml_api( request: ImportConferenceRequest = No
     return await controller.do_import_xml(request)
 
 
-
 @app.post('/api/import-xml', response_model=ConferenceImportRequestResponse, )
 async def import_conference_xml_api(_request: Request, request: ImportConferenceRequest = None):
 
@@ -137,6 +136,16 @@ async def import_conference_xml_api(_request: Request, request: ImportConference
 
     return await controller.do_import_xml(request)
 
+
+class LastSyncRequest(pydantic.BaseModel):
+    last_sync_time: Optional[datetime.datetime] = None
+
+
+@app.get('/api/admin/last-sync-time', response_model=LastSyncRequest)
+async def get_last_sync_time(token: str = Depends(oauth2_scheme_admin)):
+    await verify_admin_token(token)
+    last_sync_time = await controller.get_last_sync_time()
+    return LastSyncRequest(last_sync_time=last_sync_time)
 
 
 @app.get('/api/conference')
@@ -205,26 +214,24 @@ async def get_dashboard():
 @app.get('/api/admin/users')
 async def get_users_with_bookmarks(
         csv: Optional[bool] = False,
-        order_field: Optional[str] = None,
-        order_direction: Optional[models.SortOrder] = None,
+        order: Optional[str] = None,
         token: str = Depends(oauth2_scheme_admin)):
     await verify_admin_token(token)
     if csv:
         return await controller.csv_users()
 
-    return {'data': await controller.get_all_anonymous_users_with_bookmarked_sessions(order_field, order_direction)}
+    return {'data': await controller.get_all_anonymous_users_with_bookmarked_sessions(order)}
 
 
 @app.get('/api/admin/sessions')
 async def get_sessions_by_rate(
         csv: Optional[bool] = False,
-        order_field: Optional[str] = None,
-        order_direction: Optional[models.SortOrder] = None,
+        order: Optional[str] = None,
         token: str = Depends(oauth2_scheme_admin)):
     await verify_admin_token(token)
     if csv:
         return await controller.csv_sessions()
-    return {'data': await controller.get_sessions_by_rate(order_field, order_direction)}
+    return {'data': await controller.get_sessions_by_rate(order)}
 
 
 @app.get('/api/admin/summary')
